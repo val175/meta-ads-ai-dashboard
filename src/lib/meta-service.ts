@@ -13,13 +13,15 @@ export interface MetaCampaign {
 }
 
 export interface MetaInsights {
-    spend: string;
-    impressions: string;
-    clicks: string;
-    reach: string;
-    cpp: string;
-    ctr: string;
-    cpc: string;
+    spend: number;
+    impressions: number;
+    clicks: number;
+    reach: number;
+    ctr: number;
+    cpc: number;
+    actions?: Array<{ action_type: string, value: string }>;
+    action_values?: Array<{ action_type: string, value: string }>;
+    purchase_roas?: Array<{ action_type: string, value: string }>;
     video_3_sec_watched_actions?: Array<{ value: string }>;
     video_thruplay_watched_actions?: Array<{ value: string }>;
 }
@@ -37,7 +39,12 @@ export async function fetchMetaCampaigns(adAccountId?: string, preset: string = 
         throw new Error("Missing Meta API credentials or Ad Account ID");
     }
 
-    const url = `${META_BASE_URL}/${targetId}/campaigns?fields=id,name,objective,status,effective_status,buying_type&access_token=${ACCESS_TOKEN}`;
+    // Unified fetch: Campaigns + Insights in ONE call
+    // Note: actions and purchase_roas are critical for B2B/B2C logic
+    const insightsFields = 'spend,impressions,clicks,reach,ctr,cpc,actions,action_values,purchase_roas';
+    const fields = `id,name,objective,status,effective_status,buying_type,insights.date_preset(${preset}){${insightsFields}}`;
+
+    const url = `${META_BASE_URL}/${targetId}/campaigns?fields=${fields}&limit=50&access_token=${ACCESS_TOKEN}`;
 
     const response = await fetch(url);
     if (!response.ok) {
@@ -46,32 +53,38 @@ export async function fetchMetaCampaigns(adAccountId?: string, preset: string = 
     }
 
     const data = await response.json();
-    const campaigns = data.data as MetaCampaign[];
+    const campaigns = data.data || [];
 
-    // Fetch insights for each campaign to populate the dashboard table
-    const campaignsWithInsights: MetaCampaignWithInsights[] = await Promise.all(
-        campaigns.map(async (camp) => {
-            try {
-                const insights = await fetchInsights(camp.id, preset);
-                return { ...camp, insights };
-            } catch (err) {
-                console.error(`Failed to fetch insights for campaign ${camp.id}:`, err);
-                return camp;
+    // Map nested insights data and parse numeric strings
+    return campaigns.map((camp: any) => {
+        const ins = camp.insights?.data?.[0];
+        if (!ins) return camp;
+
+        return {
+            ...camp,
+            insights: {
+                spend: Number(ins.spend || 0),
+                impressions: Number(ins.impressions || 0),
+                clicks: Number(ins.clicks || 0),
+                reach: Number(ins.reach || 0),
+                ctr: Number(ins.ctr || 0),
+                cpc: Number(ins.cpc || 0),
+                actions: ins.actions || [],
+                action_values: ins.action_values || [],
+                purchase_roas: ins.purchase_roas || []
             }
-        })
-    );
-
-    return campaignsWithInsights;
+        };
+    }) as MetaCampaignWithInsights[];
 }
 
 export async function fetchInsights(objectId: string, preset: string = 'last_7d') {
-    // Note: video_3_sec_watched_actions are NOT valid top-level fields. 
-    // They must be queried via 'actions' or specific video fields. 
-    // Removing them to restore core data (Spend, ROAS, CTR).
-    const fields = 'spend,impressions,clicks,reach,ctr,cpc';
+    const fields = 'spend,impressions,clicks,reach,ctr,cpc,actions,action_values,purchase_roas';
 
-    // Ensure account IDs have act_ prefix, campaigns do not
-    const targetId = objectId.length > 15 ? objectId : formatAccountId(objectId);
+    // Determine if objectId is an ad account ID or a campaign ID
+    // Ad account IDs are typically 15-17 digits, campaign IDs are longer (e.g., 18 digits)
+    // If it's an ad account ID (shorter, or starts with 'act_'), format it. Otherwise, use as is.
+    const targetId = objectId.startsWith('act_') || objectId.length <= 17 ? formatAccountId(objectId) : objectId;
+
     const url = `${META_BASE_URL}/${targetId}/insights?fields=${fields}&date_preset=${preset}&access_token=${ACCESS_TOKEN}`;
 
     const response = await fetch(url);
@@ -81,7 +94,20 @@ export async function fetchInsights(objectId: string, preset: string = 'last_7d'
         return undefined;
     }
     const data = await response.json();
-    return data.data?.[0] as MetaInsights | undefined;
+    const ins = data.data?.[0];
+    if (!ins) return undefined;
+
+    return {
+        spend: Number(ins.spend || 0),
+        impressions: Number(ins.impressions || 0),
+        clicks: Number(ins.clicks || 0),
+        reach: Number(ins.reach || 0),
+        ctr: Number(ins.ctr || 0),
+        cpc: Number(ins.cpc || 0),
+        actions: ins.actions || [],
+        action_values: ins.action_values || [],
+        purchase_roas: ins.purchase_roas || []
+    } as MetaInsights;
 }
 
 export async function createAdCreative(params: {

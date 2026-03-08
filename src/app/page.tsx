@@ -22,6 +22,7 @@ export default function Home() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [generatedCreative, setGeneratedCreative] = useState<string | null>(null);
+  const [isAssessing, setIsAssessing] = useState(false);
 
   useEffect(() => {
     async function loadData() {
@@ -55,12 +56,24 @@ export default function Home() {
           const clicks = Number(ins.clicks || 0);
           const impressions = Number(ins.impressions || 0);
 
+          // Real ROAS check (from purchase_roas array)
+          const purchaseRoas = Array.isArray(ins.purchase_roas)
+            ? ins.purchase_roas.find((r: any) => r.action_type === 'purchase')?.value || 0
+            : 0;
+
+          // Real Leads check (for B2B CPL)
+          const leads = Array.isArray(ins.actions)
+            ? ins.actions.find((a: any) => a.action_type === 'lead')?.value || 0
+            : 0;
+
           return {
             id: c.id,
             name: c.name,
             status: c.status,
             spend: spend,
-            roas: spend > 0 ? Number((clicks / (spend / 10)).toFixed(2)) : 0, // Mock ROAS calculation if missing
+            roas: Number(purchaseRoas),
+            leads: Number(leads),
+            cpl: Number(leads) > 0 ? Number((spend / Number(leads)).toFixed(2)) : 0,
             ctr: impressions > 0 ? Number((clicks / impressions * 100).toFixed(2)) : 0,
             aiAssessment: (spend > 0 || clicks > 0)
               ? "Live performance data active. Multi-snapshot analysis ready."
@@ -87,7 +100,8 @@ export default function Home() {
   }, [currentAccountId, timeframe]);
 
   const handleAssess = async (campaign: Campaign) => {
-    setSelectedCampaign(campaign);
+    setSelectedCampaign({ ...campaign, aiAssessment: "Thinking... 🧠🤖" });
+    setIsAssessing(true);
     // Fetch AI Assessment for this specific campaign
     try {
       const res = await fetch("/api/assess", {
@@ -104,9 +118,12 @@ export default function Home() {
         setCampaigns(prev => prev.map(c =>
           c.id === campaign.id ? { ...c, aiAssessment: data.assessment } : c
         ));
+        setSelectedCampaign(prev => prev ? { ...prev, aiAssessment: data.assessment } : null);
       }
     } catch (err) {
       console.error("Assessment failed:", err);
+    } finally {
+      setIsAssessing(false);
     }
   };
 
@@ -281,7 +298,7 @@ export default function Home() {
               <th>Campaign Name</th>
               <th>Status</th>
               <th>Spend</th>
-              <th>ROAS</th>
+              <th>{businessType === 'B2C' ? 'ROAS' : 'CPL'}</th>
               <th>CTR</th>
               <th>AI Health</th>
               <th style={{ textAlign: 'right' }}>Actions</th>
@@ -303,13 +320,23 @@ export default function Home() {
                   </span>
                 </td>
                 <td>${camp.spend.toLocaleString()}</td>
-                <td>{camp.roas > 0 ? `${camp.roas}x` : 'N/A'}</td>
-                <td>{camp.ctr}%</td>
+                <td>
+                  {businessType === 'B2C'
+                    ? (camp.roas > 0 ? `${camp.roas.toFixed(2)}x` : 'N/A')
+                    : (camp.cpl && camp.cpl > 0 ? `$${camp.cpl.toLocaleString()}` : 'N/A')}
+                </td>
+                <td>{camp.ctr.toFixed(2)}%</td>
                 <td>
                   <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-                    <span style={{ color: (camp.roas > 3 || camp.roas === 0) ? 'hsl(var(--status-positive))' : 'hsl(var(--status-warning))' }}>●</span>
+                    <span style={{
+                      color: (businessType === 'B2C' ? camp.roas > 3 : (camp.cpl && camp.cpl < 20)) || (camp.spend === 0)
+                        ? 'hsl(var(--status-positive))'
+                        : 'hsl(var(--status-warning))'
+                    }}>●</span>
                     <span style={{ fontSize: '0.8rem', color: 'hsl(var(--fg-secondary))' }}>
-                      {(camp.roas > 3 || camp.roas === 0) ? 'Healthy' : 'Optimization Needed'}
+                      {(businessType === 'B2C' ? camp.roas > 3 : (camp.cpl && camp.cpl < 20)) || (camp.spend === 0)
+                        ? 'Healthy'
+                        : 'Optimization Needed'}
                     </span>
                   </div>
                 </td>

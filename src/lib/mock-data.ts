@@ -8,6 +8,8 @@ export interface Campaign {
   ctr: number;
   cpc: number;
   roas: number;
+  leads?: number;
+  cpl?: number;
   aiAssessment?: string;
 }
 
@@ -22,6 +24,8 @@ export const mockCampaigns: Campaign[] = [
     ctr: 2.67,
     cpc: 1.04,
     roas: 4.2,
+    leads: 0,
+    cpl: 0,
     aiAssessment: "Strong performance but frequency is creeping up (3.2). Recommend rotating creative to prevent fatigue."
   },
   {
@@ -34,6 +38,8 @@ export const mockCampaigns: Campaign[] = [
     ctr: 1.5,
     cpc: 1.88,
     roas: 2.8,
+    leads: 0,
+    cpl: 0,
     aiAssessment: "CPM is higher than average (28.33). Consider testing broader targeting concepts to lower costs."
   },
   {
@@ -46,6 +52,8 @@ export const mockCampaigns: Campaign[] = [
     ctr: 3.0,
     cpc: 1.11,
     roas: 0, // N/A for Lead Gen
+    leads: 45,
+    cpl: 11.12,
     aiAssessment: "Great CTR! Re-enable with expanded budget if lead quality from the CRM is verified."
   }
 ];
