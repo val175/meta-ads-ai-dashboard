@@ -5,8 +5,9 @@ export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const accountId = searchParams.get('accountId');
+        const preset = searchParams.get('preset') || 'last_7d';
 
-        const campaigns = await fetchMetaCampaigns(accountId || undefined);
+        const campaigns = await fetchMetaCampaigns(accountId || undefined, preset);
         return NextResponse.json(campaigns);
     } catch (error: any) {
         console.warn("Meta API Error or Missing Credentials. Falling back to mock data.", error.message);
