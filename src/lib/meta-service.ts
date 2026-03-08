@@ -65,11 +65,21 @@ export async function fetchMetaCampaigns(adAccountId?: string, preset: string = 
 }
 
 export async function fetchInsights(objectId: string, preset: string = 'last_7d') {
-    const fields = 'spend,impressions,clicks,reach,ctr,cpc,video_3_sec_watched_actions,video_thruplay_watched_actions';
-    const url = `${META_BASE_URL}/${objectId}/insights?fields=${fields}&date_preset=${preset}&access_token=${ACCESS_TOKEN}`;
+    // Note: video_3_sec_watched_actions are NOT valid top-level fields. 
+    // They must be queried via 'actions' or specific video fields. 
+    // Removing them to restore core data (Spend, ROAS, CTR).
+    const fields = 'spend,impressions,clicks,reach,ctr,cpc';
+
+    // Ensure account IDs have act_ prefix, campaigns do not
+    const targetId = objectId.length > 15 ? objectId : formatAccountId(objectId);
+    const url = `${META_BASE_URL}/${targetId}/insights?fields=${fields}&date_preset=${preset}&access_token=${ACCESS_TOKEN}`;
 
     const response = await fetch(url);
-    if (!response.ok) return undefined;
+    if (!response.ok) {
+        const err = await response.json();
+        console.error(`[Meta Service] Insights Error for ${targetId}:`, err.error?.message);
+        return undefined;
+    }
     const data = await response.json();
     return data.data?.[0] as MetaInsights | undefined;
 }

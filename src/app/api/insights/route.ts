@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
         const insights = await fetchInsights(accountId || "", preset);
         return NextResponse.json(insights || {});
     } catch (error: any) {
+        console.error("[API] Insights Error:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

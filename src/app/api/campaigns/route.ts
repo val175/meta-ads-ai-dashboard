@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
         const campaigns = await fetchMetaCampaigns(accountId || undefined, preset);
         return NextResponse.json(campaigns);
     } catch (error: any) {
-        console.warn("Meta API Error or Missing Credentials. Falling back to mock data.", error.message);
+        console.error("[API] Campaigns Error:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }

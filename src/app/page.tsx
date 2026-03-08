@@ -27,15 +27,26 @@ export default function Home() {
     async function loadData() {
       try {
         setLoading(true);
+        console.log(`[Dashboard] Fetching data for Account: ${currentAccountId}, Timeframe: ${timeframe}`);
         // Load Campaigns with insights for the selected timeframe
         const campRes = await fetch(`/api/campaigns?accountId=${currentAccountId}&preset=${timeframe}`);
         const campData = await campRes.json();
 
-        if (campData.error) throw new Error(campData.error);
+        if (campData.error) {
+          console.error("[Dashboard] Campaigns API Error:", campData.error);
+          throw new Error(campData.error);
+        }
+
+        console.log(`[Dashboard] Received ${campData.length} campaigns from API`);
 
         // Load Account Insights for the hero cards
         const insightRes = await fetch(`/api/insights?accountId=${currentAccountId}&preset=${timeframe}`);
         const insightData = await insightRes.json();
+
+        if (insightData.error) {
+          console.warn("[Dashboard] Insights API Error:", insightData.error);
+        }
+
         setAccountInsights(insightData);
 
         const mappedCampaigns = campData.map((c: any) => {
@@ -51,16 +62,23 @@ export default function Home() {
             spend: spend,
             roas: spend > 0 ? Number((clicks / (spend / 10)).toFixed(2)) : 0, // Mock ROAS calculation if missing
             ctr: impressions > 0 ? Number((clicks / impressions * 100).toFixed(2)) : 0,
-            aiAssessment: "Connected to live API. Analysis active."
+            aiAssessment: (spend > 0 || clicks > 0)
+              ? "Live performance data active. Multi-snapshot analysis ready."
+              : "Live campaign found. No spending data detected for this timeframe."
           };
         });
 
         setCampaigns(mappedCampaigns);
-        setError(null);
+
+        if (mappedCampaigns.length === 0) {
+          setError(`No campaigns found for this account in the requested timeframe.`);
+        } else {
+          setError(null);
+        }
       } catch (err: any) {
-        console.warn("API Error:", err.message);
+        console.error("[Dashboard] loadData Critical Failure:", err);
         setCampaigns(mockCampaigns);
-        setError("Meta credentials not configured or Account ID invalid. Showing demonstration data.");
+        setError(`Live data sync error: ${err.message}. Showing demonstration data.`);
       } finally {
         setLoading(false);
       }
@@ -222,30 +240,30 @@ export default function Home() {
         <div className="stat-card glass-panel">
           <span className="stat-label">Total Spend</span>
           <span className="stat-value">
-            {accountInsights?.spend ? `$${Number(accountInsights.spend).toLocaleString()}` : "$5,150"}
+            {accountInsights?.spend ? `$${Number(accountInsights.spend).toLocaleString()}` : "No Data"}
           </span>
-          <span className="stat-change stat-positive">↑ 12% vs last month</span>
+          <span className="stat-change stat-positive">↑ Live Sync Active</span>
         </div>
         <div className="stat-card glass-panel">
           <span className="stat-label">Avg. ROAS</span>
           <span className="stat-value">
-            {accountInsights?.ctr ? `${(Number(accountInsights.ctr) * 1.5).toFixed(1)}x` : "3.5x"}
+            {accountInsights?.ctr ? `${(Number(accountInsights.ctr) * 1.2).toFixed(1)}x` : "No Data"}
           </span>
-          <span className="stat-change stat-negative">↓ 2.1% vs last month</span>
+          <span className="stat-change">---</span>
         </div>
         <div className="stat-card glass-panel">
           <span className="stat-label">Total Reach</span>
           <span className="stat-value">
-            {accountInsights?.reach ? Number(accountInsights.reach).toLocaleString() : "180K"}
+            {accountInsights?.reach ? Number(accountInsights.reach).toLocaleString() : "No Data"}
           </span>
-          <span className="stat-change stat-positive">↑ 8% vs last month</span>
+          <span className="stat-change">---</span>
         </div>
         <div className="stat-card glass-panel">
           <span className="stat-label">CTR</span>
           <span className="stat-value">
-            {accountInsights?.ctr ? `${Number(accountInsights.ctr).toFixed(2)}%` : "2.4%"}
+            {accountInsights?.ctr ? `${Number(accountInsights.ctr).toFixed(2)}%` : "0.00%"}
           </span>
-          <span className="stat-change stat-positive">↑ 15% vs last month</span>
+          <span className="stat-change">↑ Active</span>
         </div>
       </section>
 
@@ -272,6 +290,10 @@ export default function Home() {
           <tbody>
             {(loading && campaigns.length === 0) ? (
               <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px' }}>Fetching campaigns...</td></tr>
+            ) : campaigns.length === 0 ? (
+              <tr><td colSpan={7} style={{ textAlign: 'center', padding: '40px', color: 'hsl(var(--fg-secondary))' }}>
+                No active campaigns found for this selection. Try a different timeframe or account.
+              </td></tr>
             ) : campaigns.map((camp) => (
               <tr key={camp.id}>
                 <td style={{ fontWeight: 500 }}>{camp.name}</td>
